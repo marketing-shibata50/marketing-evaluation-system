@@ -5,14 +5,18 @@ import { prisma } from '@/lib/prisma'
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const employeeId = searchParams.get('employeeId')
+  const patternId = searchParams.get('patternId')
   
   try {
-    const where = employeeId ? { employeeId: parseInt(employeeId) } : {}
+    const where: any = {}
+    if (employeeId) where.employeeId = parseInt(employeeId)
+    if (patternId) where.patternId = patternId
     
     const evaluations = await prisma.evaluation.findMany({
       where,
       include: {
-        employee: true
+        employee: true,
+        items: true
       },
       orderBy: { createdAt: 'desc' }
     })
@@ -29,38 +33,36 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { 
       employeeId, 
+      patternId,
       periodStart, 
       periodEnd,
-      performance,
-      skill,
-      growth,
-      contribution,
-      comment
+      totalScore,
+      grade,
+      comment,
+      items
     } = body
-
-    // 合計スコアと評価等級を計算
-    const totalScore = performance + skill + growth + contribution
-    let grade = 'D'
-    if (totalScore >= 90) grade = 'S'
-    else if (totalScore >= 80) grade = 'A'
-    else if (totalScore >= 70) grade = 'B'
-    else if (totalScore >= 60) grade = 'C'
 
     const evaluation = await prisma.evaluation.create({
       data: {
         employeeId,
+        patternId,
         periodStart: new Date(periodStart),
         periodEnd: new Date(periodEnd),
-        performance,
-        skill,
-        growth,
-        contribution,
         totalScore,
         grade,
-        comment
+        comment,
+        items: {
+          create: items.map((item: any) => ({
+            itemId: item.itemId,
+            itemName: item.itemName,
+            score: item.score,
+            maxScore: item.maxScore
+          }))
+        }
       },
       include: {
-        employee: true
+        employee: true,
+        items: true
       }
     })
 

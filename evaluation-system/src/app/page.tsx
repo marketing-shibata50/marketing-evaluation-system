@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import EvaluationForm from '@/components/EvaluationForm'
+import { evaluationPatterns } from '@/types/evaluation-patterns'
 
 type Employee = {
   id: number
@@ -9,37 +11,34 @@ type Employee = {
   position: string
 }
 
+type EvaluationItem = {
+  id: number
+  evaluationId: number
+  itemId: string
+  itemName: string
+  score: number
+  maxScore: number
+}
+
 type Evaluation = {
   id: number
   employeeId: number
+  patternId: string
   periodStart: string
   periodEnd: string
-  performance: number
-  skill: number
-  growth: number
-  contribution: number
   totalScore: number
   grade: string
   comment?: string
   employee?: Employee
+  items?: EvaluationItem[]
 }
 
 export default function Home() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null)
+  const [selectedPattern, setSelectedPattern] = useState(evaluationPatterns[0].id)
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
   
-  // フォームデータ
-  const [formData, setFormData] = useState({
-    periodStart: new Date().toISOString().split('T')[0],
-    periodEnd: new Date().toISOString().split('T')[0],
-    performance: 0,
-    skill: 0,
-    growth: 0,
-    contribution: 0,
-    comment: ''
-  })
-
   // 新規従業員フォーム
   const [newEmployee, setNewEmployee] = useState({
     name: '',
@@ -52,12 +51,12 @@ export default function Home() {
     fetchEmployees()
   }, [])
 
-  // 選択した従業員の評価を取得
+  // 選択した従業員・パターンの評価を取得
   useEffect(() => {
-    if (selectedEmployee) {
-      fetchEvaluations(selectedEmployee)
+    if (selectedEmployee && selectedPattern) {
+      fetchEvaluations(selectedEmployee, selectedPattern)
     }
-  }, [selectedEmployee])
+  }, [selectedEmployee, selectedPattern])
 
   const fetchEmployees = async () => {
     const res = await fetch('/api/employees')
@@ -65,8 +64,8 @@ export default function Home() {
     setEmployees(data)
   }
 
-  const fetchEvaluations = async (employeeId: number) => {
-    const res = await fetch(`/api/evaluations?employeeId=${employeeId}`)
+  const fetchEvaluations = async (employeeId: number, patternId: string) => {
+    const res = await fetch(`/api/evaluations?employeeId=${employeeId}&patternId=${patternId}`)
     const data = await res.json()
     setEvaluations(data)
   }
@@ -84,41 +83,22 @@ export default function Home() {
     }
   }
 
-  const handleSubmitEvaluation = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedEmployee) return
-
+  const handleSubmitEvaluation = async (evaluationData: any) => {
     const res = await fetch('/api/evaluations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        employeeId: selectedEmployee,
-        ...formData
-      })
+      body: JSON.stringify(evaluationData)
     })
     
     if (res.ok) {
       alert('評価を保存しました！')
-      fetchEvaluations(selectedEmployee)
-      // フォームをリセット
-      setFormData({
-        periodStart: new Date().toISOString().split('T')[0],
-        periodEnd: new Date().toISOString().split('T')[0],
-        performance: 0,
-        skill: 0,
-        growth: 0,
-        contribution: 0,
-        comment: ''
-      })
+      if (selectedEmployee && selectedPattern) {
+        fetchEvaluations(selectedEmployee, selectedPattern)
+      }
     }
   }
 
-  const totalScore = formData.performance + formData.skill + formData.growth + formData.contribution
-  let grade = 'D'
-  if (totalScore >= 90) grade = 'S'
-  else if (totalScore >= 80) grade = 'A'
-  else if (totalScore >= 70) grade = 'B'
-  else if (totalScore >= 60) grade = 'C'
+  const currentPattern = evaluationPatterns.find(p => p.id === selectedPattern)!
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -171,7 +151,7 @@ export default function Home() {
                         : 'bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600'
                     } border`}
                   >
-                    <div className="font-semibold">{emp.name}</div>
+                    <div className="font-semibold dark:text-gray-100">{emp.name}</div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">{emp.position}</div>
                   </button>
                 ))}
@@ -182,136 +162,71 @@ export default function Home() {
           {/* 右側：評価フォーム */}
           <div className="lg:col-span-2">
             {selectedEmployee ? (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-semibold mb-4 dark:text-gray-100">4軸統合評価システム</h2>
-                
-                <form onSubmit={handleSubmitEvaluation} className="space-y-6">
-                  {/* 評価期間 */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1 dark:text-gray-200">開始日</label>
-                      <input
-                        type="date"
-                        value={formData.periodStart}
-                        onChange={(e) => setFormData({...formData, periodStart: e.target.value})}
-                        className="w-full px-3 py-2 border rounded bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1 dark:text-gray-200">終了日</label>
-                      <input
-                        type="date"
-                        value={formData.periodEnd}
-                        onChange={(e) => setFormData({...formData, periodEnd: e.target.value})}
-                        className="w-full px-3 py-2 border rounded bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
-                      />
-                    </div>
+              <div className="space-y-6">
+                {/* タブナビゲーション */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+                  <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">評価パターンを選択</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {evaluationPatterns.map((pattern) => (
+                      <button
+                        key={pattern.id}
+                        onClick={() => setSelectedPattern(pattern.id)}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                          selectedPattern === pattern.id
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        <div>{pattern.name}</div>
+                        <div className="text-xs">
+                          {'★'.repeat(pattern.recommendationLevel)}{'☆'.repeat(5 - pattern.recommendationLevel)}
+                        </div>
+                      </button>
+                    ))}
                   </div>
+                </div>
 
-                  {/* 評価項目 */}
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                        Performance（成果） - 40点満点
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="40"
-                        value={formData.performance}
-                        onChange={(e) => setFormData({...formData, performance: parseInt(e.target.value) || 0})}
-                        className="w-full px-3 py-2 border rounded bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                        Skill（スキル） - 25点満点
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="25"
-                        value={formData.skill}
-                        onChange={(e) => setFormData({...formData, skill: parseInt(e.target.value) || 0})}
-                        className="w-full px-3 py-2 border rounded bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                        Growth（成長） - 20点満点
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="20"
-                        value={formData.growth}
-                        onChange={(e) => setFormData({...formData, growth: parseInt(e.target.value) || 0})}
-                        className="w-full px-3 py-2 border rounded bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1 dark:text-gray-200">
-                        Contribution（貢献） - 15点満点
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="15"
-                        value={formData.contribution}
-                        onChange={(e) => setFormData({...formData, contribution: parseInt(e.target.value) || 0})}
-                        className="w-full px-3 py-2 border rounded bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1 dark:text-gray-200">コメント</label>
-                      <textarea
-                        value={formData.comment}
-                        onChange={(e) => setFormData({...formData, comment: e.target.value})}
-                        className="w-full px-3 py-2 border rounded bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-600"
-                        rows={3}
-                      />
-                    </div>
+                {/* 評価フォーム */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                  <div className="mb-4">
+                    <h2 className="text-xl font-semibold dark:text-gray-100">{currentPattern.name}</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{currentPattern.description}</p>
                   </div>
-
-                  {/* スコアサマリー */}
-                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded">
-                    <div className="text-lg font-semibold dark:text-gray-100">
-                      合計スコア: {totalScore}点 / 100点
-                    </div>
-                    <div className="text-lg dark:text-gray-100">
-                      評価: <span className={`font-bold ${
-                        grade === 'S' ? 'text-purple-600 dark:text-purple-400' :
-                        grade === 'A' ? 'text-green-600 dark:text-green-400' :
-                        grade === 'B' ? 'text-blue-600 dark:text-blue-400' :
-                        grade === 'C' ? 'text-yellow-600 dark:text-yellow-400' :
-                        'text-red-600 dark:text-red-400'
-                      }`}>{grade}</span>
-                    </div>
-                  </div>
-
-                  <button 
-                    type="submit"
-                    className="w-full bg-green-500 text-white py-3 rounded hover:bg-green-600 font-semibold"
-                  >
-                    評価を保存
-                  </button>
-                </form>
+                  
+                  <EvaluationForm
+                    pattern={currentPattern}
+                    employeeId={selectedEmployee}
+                    onSubmit={handleSubmitEvaluation}
+                  />
+                </div>
 
                 {/* 過去の評価 */}
                 {evaluations.length > 0 && (
-                  <div className="mt-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <h3 className="text-lg font-semibold mb-4 dark:text-gray-100">過去の評価</h3>
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                       {evaluations.map((evaluation) => (
                         <div key={evaluation.id} className="bg-gray-50 dark:bg-gray-700 p-4 rounded">
-                          <div className="flex justify-between">
-                            <span>{new Date(evaluation.periodStart).toLocaleDateString()} - {new Date(evaluation.periodEnd).toLocaleDateString()}</span>
-                            <span className="font-semibold">{evaluation.totalScore}点 ({evaluation.grade})</span>
+                          <div className="flex justify-between mb-2">
+                            <span className="dark:text-gray-200">
+                              {new Date(evaluation.periodStart).toLocaleDateString()} - {new Date(evaluation.periodEnd).toLocaleDateString()}
+                            </span>
+                            <span className="font-semibold dark:text-gray-100">{evaluation.totalScore}点 ({evaluation.grade})</span>
                           </div>
+                          {evaluation.items && (
+                            <div className="mt-2 space-y-1">
+                              {evaluation.items.map((item) => (
+                                <div key={item.id} className="text-sm text-gray-600 dark:text-gray-400">
+                                  {item.itemName}: {item.score}/{item.maxScore}点
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {evaluation.comment && (
+                            <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                              コメント: {evaluation.comment}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
