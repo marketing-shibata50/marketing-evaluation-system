@@ -1,0 +1,46 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 従業員
+model Employee {
+  id          Int          @id @default(autoincrement())
+  name        String
+  department  String
+  position    String
+  createdAt   DateTime     @default(now())
+  evaluations Evaluation[]
+}
+
+// 評価データ（まずは1パターンのみ）
+model Evaluation {
+  id           Int      @id @default(autoincrement())
+  employeeId   Int
+  employee     Employee @relation(fields: [employeeId], references: [id])
+  
+  // 評価期間
+  periodStart  DateTime
+  periodEnd    DateTime
+  
+  // 4軸評価の各スコア
+  performance  Int      // 成果 (40点満点)
+  skill        Int      // スキル (25点満点)
+  growth       Int      // 成長 (20点満点)
+  contribution Int      // 貢献 (15点満点)
+  
+  totalScore   Int      // 合計スコア (100点満点)
+  grade        String   // 評価等級 (S/A/B/C/D)
+  
+  comment      String?  // コメント（オプション）
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
